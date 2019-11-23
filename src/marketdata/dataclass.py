@@ -16,8 +16,10 @@ class ExchangeBase(metaclass=ABCMeta):
         self.secret_key      = kwargs.pop("secret_key", "")
         self.passphrase      = kwargs.pop("passphrase", "")
         self.endpoint_name   = kwargs.pop("endpoint_name", "")
-        self.symbols         = ["BTC-USDT", "ETH-USDT"]
+        self.symbols         = ["ETH-USDT"]
         self.sleep_time      = 0.1
+        self.back_test_mode  = kwargs.pop("back_test_mode", False)
+        self.back_test_data  = kwargs.pop("back_test_data", "")
 
     @abstractmethod
     def creatRequet(self):
@@ -48,10 +50,15 @@ class OKExOrder(ExchangeBase):
 
 class OKExSpotMarketData(ExchangeBase):
     def getPath(self):
-        for sym in self.symbols:
-            yield self.base_url + F"{self.endpoint}/{sym}/{self.endpoint_name}"
-    
-    def creatRequet(self):
+        paths = [self.base_url + F"{self.endpoint}/{sym}/{self.endpoint_name}" for sym in self.symbols]
         while True:
-            for url in self.getPath():
-                yield url, {}
+            yield paths[0]
+           
+    def creatRequet(self):
+        if not self.back_test_mode:
+            while True:
+                for url in self.getPath():
+                    yield url, {}
+        else:
+            yield self.back_test_data
+                
