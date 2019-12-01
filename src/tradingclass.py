@@ -5,7 +5,8 @@ import asks
 import csv
 from asks import Session
 from importlib import import_module
-from utils import MissingEngineExcpetion
+from utils import MissingEngineExcpetion, SessionWrap
+from utils import Mode
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO,
@@ -14,6 +15,7 @@ logging.basicConfig(level=logging.INFO,
                     filename=f'log/trading_{time.time()}.log',
                     filemode='w')
 
+          
 class AlfaEngine:
     def __init__(self, strategy, date):
         self.strategy = strategy
@@ -22,6 +24,13 @@ class AlfaEngine:
         async with receive_channel:
             async for endpoint_name, data in receive_channel:
                 pass
+                # if self.strategy.data_type == endpoint_name:
+                #     self.strategy.data_reveiver(endpoint_name, data)
+
+    async def singal(self, send_channel):
+        self.strategy
+        await send_channel.send([self.strategy.name, ])
+
 
 class MarketDataEngine:
     def __init__(self, config):
@@ -40,22 +49,22 @@ class MarketDataEngine:
         return res
 
 class TradingEngine:
-    def  __init__(self, executionEngine, date):
+    def  __init__(self, executionEngine, date, mode, data_db):
         self.executionEngine = executionEngine
         self.alfaEngines = {}
         self.marketDataEngines = []
         self.date = date
-        self.writer = {}
+        self.db_obj = data_db
+        self.mode = mode
 
     def addAlfaEngine(self, engineName, engine):
         if engineName in self.alfaEngines:
             print("replace")
         self.alfaEngines[engineName] = engine
 
-    def addMarketDataEngine(self, marketDataEngines):
+    def addMarketDataEngine(self, marketDataEngines, ):
         for engine in marketDataEngines:
             self.marketDataEngines.append(engine)
-            self.writer[engine.endpoint_name] = f"data/{engine.endpoint_name}_{self.date}.csv"
 
     def validation(self):
         if not self.marketDataEngines:
@@ -63,22 +72,18 @@ class TradingEngine:
         if not self.alfaEngines:
             raise MissingEngineExcpetion("No alfa engine")
 
-
     async def data_writer(self, receive_channel):
         import pandas as pd
         async with receive_channel:
             async for endpoint_name, data in receive_channel:
-                if isinstance(data, dict):
-                    data = [data]
-                df = pd.DataFrame(data)
-                df.to_csv(self.writer[endpoint_name], index=False, mode="a+")
-        
+                self.db_obj.write_data(endpoint_name, data)
+                
         log.info("done")
 
     async def grabberData(self, obj, send_channel, session):
         for url, header in obj.creatRequet():
             try:
-                resp = await session.request("GET", url, header=header, timeout=2)
+                resp = await session.send_request("GET", url, header=header, timeout=2)
             except asks.errors.RequestTimeout:
                 log.warning("%s time out", obj.endpoint_name)
                 continue
@@ -90,14 +95,16 @@ class TradingEngine:
 
 
     async def getMarketData(self):
-        session = Session()
+        session = SessionWrap(data_db=self.db_obj,
+                              mode=self.mode)
         self.validation()
         async with trio.open_nursery() as nursery:
             send_channel, receive_channel = trio.open_memory_channel(0)
             for markeDataEngine in self.marketDataEngines:
                 nursery.start_soon(self.grabberData, markeDataEngine, send_channel, session)
-
-            nursery.start_soon(self.data_writer, receive_channel)
+            
+            if self.mode != Mode.TEST:
+                nursery.start_soon(self.data_writer, receive_channel)
 
             # for name, alfaEngine in self.alfaEngines.items():
             #     nursery.start_soon(alfaEngine.dataReceiver, receive_channel)
@@ -109,4 +116,3 @@ class TradingEngine:
             for alfaEngine in self.alfaEngines:
                 nursery.start_soon(alfaEngine.singal, send_channel)
             nursery.start_soon(self.executionEngine.receive, receive_channel, session)
-
