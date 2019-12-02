@@ -12,15 +12,18 @@ from marketdata.datadb import DataDB
 from utils import Mode
 
 async def run():
-    config = configparser.ConfigParser(strict=False)
-    config.read("src/config/exchangeinfo.conf")
+    market_config = configparser.ConfigParser(strict=False)
+    market_config.read("src/config/exchangeinfo.conf")
+    marketDataMarker = MarketDataEngine(market_config)
 
     data_db = DataDB("market_data")
     data_db.start_client()
+
     trading = TradingEngine(None, datetime.date.today(), Mode.PROD, data_db)
-    marketDataMarker = MarketDataEngine(config)
+    
     alfa = AlfaEngine(None, datetime.date.today())
     marketDataObjs = marketDataMarker.createMarketDataObjects()
+    
     trading.addMarketDataEngine(marketDataObjs)
     trading.addAlfaEngine("test", alfa)
 

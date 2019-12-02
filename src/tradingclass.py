@@ -20,17 +20,15 @@ class AlfaEngine:
     def __init__(self, strategy, date):
         self.strategy = strategy
 
-    async def dataReceiver(self, receive_channel):
+    async def data_receiver(self, receive_channel, send_channel):
         async with receive_channel:
             async for endpoint_name, data in receive_channel:
-                pass
-                # if self.strategy.data_type == endpoint_name:
-                #     self.strategy.data_reveiver(endpoint_name, data)
-
+                if self.strategy.data_type == endpoint_name:
+                    self.strategy.data_reveiver(endpoint_name, data)
+                   
     async def singal(self, send_channel):
-        self.strategy
-        await send_channel.send([self.strategy.name, ])
-
+        async for order in self.strategy.get_singal():
+            await send_channel.send([self.strategy.name, order])
 
 class MarketDataEngine:
     def __init__(self, config):
@@ -62,7 +60,7 @@ class TradingEngine:
             print("replace")
         self.alfaEngines[engineName] = engine
 
-    def addMarketDataEngine(self, marketDataEngines, ):
+    def addMarketDataEngine(self, marketDataEngines):
         for engine in marketDataEngines:
             self.marketDataEngines.append(engine)
 
@@ -73,13 +71,17 @@ class TradingEngine:
             raise MissingEngineExcpetion("No alfa engine")
 
     async def data_writer(self, receive_channel):
-        import pandas as pd
         async with receive_channel:
             async for endpoint_name, data in receive_channel:
                 self.db_obj.write_data(endpoint_name, data)
                 
         log.info("done")
 
+    async def order_execute(self, receive_channel):
+        async with receive_channel:
+            async for order in receive_channel:
+                self.executionEngine.send_order(order)
+                
     async def grabberData(self, obj, send_channel, session):
         for url, header in obj.creatRequet():
             try:
@@ -106,8 +108,8 @@ class TradingEngine:
             if self.mode != Mode.TEST:
                 nursery.start_soon(self.data_writer, receive_channel)
 
-            # for name, alfaEngine in self.alfaEngines.items():
-            #     nursery.start_soon(alfaEngine.dataReceiver, receive_channel)
+            for alfaEngine in self.alfaEngines.items():
+                nursery.start_soon(alfaEngine.data_receiver, receive_channel)
 
     async def getSingal(self):
         session = Session()

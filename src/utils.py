@@ -3,6 +3,7 @@ import datetime
 import os
 import csv
 from enum import Enum
+from matchingengine.engine import MatchEngine
 
 DATA_TYPE_LINE_BREAK = {"trade": "price",
                         "ticker": "ask",
@@ -48,12 +49,21 @@ class SessionWrap(Session):
         data_db = kwargs.pop("data_db", None)
         if self.mode == Mode.TEST:
             self.respone = Respone(data_db)
+            self.matching_engine = MatchEngine()
 
         super(SessionWrap, self).__init__(**kwargs)
 
     async def send_request(self, request_method, url, header, timeout):
         if self.mode == Mode.TEST:
             resp = self.respone.request(url)
+        else:
+            resp = await self.request(request_method, url, header=header, timeout=timeout)
+
+        return resp
+
+    async def send_order(self, order, request_method, url, header, timeout):
+        if self.mode == Mode.TEST:
+            resp = self.matching_engine.add_order(order)
         else:
             resp = await self.request(request_method, url, header=header, timeout=timeout)
 
