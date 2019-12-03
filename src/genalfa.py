@@ -146,3 +146,121 @@ class Naive1(Btrade):
                 self.receive_fill(trade)
             
         return self.positions
+    
+    
+    
+    class Naive2(Btrade):
+    name = "naive_alpha01"
+
+    def __init__(self, *args, **kwargs):
+        self.target_buy_price = []
+        self.target_sell_price = []
+        self.weight = []
+        self.volume = 0.5
+        self.order_id = int(time.time()*1000)
+        self.data_needs = {"book"}
+        self.waiting_time = 2
+        self.pre_timestampe = 0
+        self.new_trades = False
+        self.alpha = 1
+        self.threshold = 0.2
+        super(Naive1, self).__init__(*args, **kwargs)
+
+    def get_order_id(self):
+        self.order_id += 1
+        return self.order_id 
+
+    def data_reveiver(self, book, timestamp):
+        if timestamp - self.pre_timestampe >= self.waiting_time:
+            asks = [p for p in book.asks][:5]
+            bids = [p for p in book.bids][:5]
+            ask_volume = [sum(o.qty for o in book.asks[ap]) for ap in asks]
+            bid_volume = [sum(o.qty for o in book.bids[bp]) for bp in bids]
+
+            # alpha > 0, ask side thicker, price goes down, buy order sell
+            self.alpha = sum(ask_volume[:3])/sum(bid_volume[:3]) - 1
+
+            self.target_buy_price = [bids[0], bids[1], bids[2]]
+            self.target_sell_price = [asks[0], asks[1], asks[2]]
+            self.weight = [[0.5, 1.5], [1.5, 0.5]]
+            self.pre_timestampe = timestamp
+            self.new_trades = True
+
+    def no_data_reveived(self):
+        return self.target_buy_price and self.target_sell_price
+
+    def create_order(self):
+       if self.new_trades:
+            self.new_trades = False
+            if self.alpha > self.threshold: # go down
+                for (w, price) in zip(self.weight[0], self.target_buy_price):
+                    self.is_valid_order(price)
+                    self.pending_orders[ORDER_TYPE.ORDER].append({"price": price, "size": self.volume * w ,
+                                   "side": "buy", "type": "limit",
+                                   "client_oid": self.get_order_id(),
+                                   "instrument_id": ""})
+                for (w, price) in zip(self.weight[1], self.target_sell_price):
+                    self.is_valid_order(price)
+                    self.pending_orders[ORDER_TYPE.ORDER].append({"price": price, "size": self.volume * w,
+                                    "side": "sell", "type": "limit",
+                                    "client_oid": self.get_order_id(),
+                                    "instrument_id": ""})
+            elif self.alpha < - self.threshold:
+                for (w, price) in zip(self.weight[1], self.target_buy_price):
+                    self.is_valid_order(price)
+                    self.pending_orders[ORDER_TYPE.ORDER].append({"price": price, "size": self.volume * w,
+                                   "side": "buy", "type": "limit",
+                                   "client_oid": self.get_order_id(),
+                                   "instrument_id": ""})
+                for (w, price) in zip(self.weight[1], self.target_sell_price):
+                    self.is_valid_order(price)
+                    self.pending_orders[ORDER_TYPE.ORDER].append({"price": price, "size": self.volume * w,
+                                    "side": "sell", "type": "limit",
+                                    "client_oid": self.get_order_id(),
+                                    "instrument_id": ""})
+            else:
+                for price in self.target_buy_price:
+                    self.is_valid_order(price)
+                    self.pending_orders[ORDER_TYPE.ORDER].append({"price": price, "size": self.volume ,
+                                   "side": "buy", "type": "limit",
+                                   "client_oid": self.get_order_id(),
+                                   "instrument_id": ""})
+                for price in self.target_sell_price:
+                    self.is_valid_order(price)
+                    self.pending_orders[ORDER_TYPE.ORDER].append({"price": price, "size": self.volume ,
+                                    "side": "sell", "type": "limit",
+                                    "client_oid": self.get_order_id(),
+                                    "instrument_id": ""})
+
+            self.target_buy_price = []
+            self.target_sell_price = []
+
+    def creat_requet(self):
+        self.pending_orders[ORDER_TYPE.ORDER] = []
+        self.remove_long_standing_order()
+        self.create_order()
+
+        return self.pending_orders
+
+    def process_market_trade(self, trades):
+        self.positions = [] 
+        for trade in trades:
+            if trade.trade_id in self.record_manager:
+                self.receive_fill(trade)
+        
+        return self.positions
+
+    def process(self, order, trades):
+        if order is None:
+            return {} #cross book
+
+        self.positions = []
+        order_id = order.order_id
+        self.record_manager[order_id] = (order.qty, time.time(), order.price)
+        self.price_stock[order.price][order_id] = order.qty
+
+        for trade in trades:
+            if trade.order_id != order_id:
+                self.receive_fill(trade)
+            
+        return self.positions
