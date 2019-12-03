@@ -1,26 +1,35 @@
 import json
-from flask import Flask, render_template
+from flask import Flask, render_template, jsonify, Response, redirect, request, url_for
 import pandas as pd
 from pymongo import MongoClient
+import itertools
+import time
 
-
-app = Flask(__name__)
+app = Flask(__name__, template_folder="template")
 
 def get_data():
     client = MongoClient()
     client = MongoClient('localhost', 27017)
     db_obj = client["market_data"]
 
-    for record in db_obj["trades.posts"].find():
-        yield record
+    return db_obj["trades.posts"].find()
 
-@app.route("/")
+
+@app.route('/')
 def index():
-    df = pd.read_csv('data').drop('Open', axis=1)
-    chart_data = df.to_dict(orient='records')
-    chart_data = json.dumps(chart_data, indent=2)
-    data = {'chart_data': chart_data}
-    return render_template("index.html", data=data)
+    data_gen = get_data()
+    if request.headers.get('accept') == 'text/event-stream':
+        def events():
+            for icon in itertools.cycle(r'\|/-'):
+                trade = next(data_gen)
+                yield "data: %sIncoming trade: %s %s %s\n\n" % (icon, trade['price'], trade['size'], trade["side"])
+                yield "chart_data: %s" % trade['price']
+                time.sleep(0.2)  # an artificial delay
+        return Response(events(), content_type='text/event-stream')
+    return redirect(url_for('static', filename='index.html'))
+
+# @app.rounte("/data")
+# def
 
 if __name__ == "__main__":
     app.run(debug=True)

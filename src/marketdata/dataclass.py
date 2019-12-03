@@ -22,7 +22,7 @@ class ExchangeBase(metaclass=ABCMeta):
         self.back_test_data  = kwargs.pop("back_test_data", "")
 
     @abstractmethod
-    def creatRequet(self):
+    def creat_requet(self):
         pass
     
     @abstractmethod
@@ -33,7 +33,7 @@ class ExchangeBase(metaclass=ABCMeta):
         return data
 
 class OKExOrder(ExchangeBase):
-    def creatRequet(self):
+    def creat_requet(self):
         message = F"{str(time.time()[:13])}GET{self.endpoint}"
         mac = hmac.new(bytes(self.secret_key, encoding='utf8'), bytes(message, encoding='utf-8'), digestmod='sha256')
         sign = base64.b64encode(mac.digest())
@@ -54,7 +54,7 @@ class OKExSpotMarketData(ExchangeBase):
         while True:
             yield paths[0]
            
-    def creatRequet(self):
+    def creat_requet(self):
         if not self.back_test_mode:
             while True:
                 for url in self.getPath():

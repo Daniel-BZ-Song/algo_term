@@ -6,7 +6,8 @@ import csv
 from asks import Session
 from importlib import import_module
 from utils import MissingEngineExcpetion, SessionWrap
-from utils import Mode
+from utils import Mode, RECEIVE_TYPE, ORDER_TYPE
+from decimal import Decimal
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO,
@@ -15,75 +16,31 @@ logging.basicConfig(level=logging.INFO,
                     filename=f'log/trading_{time.time()}.log',
                     filemode='w')
 
-          
-class AlfaEngine:
-    def __init__(self, strategy, date):
-        self.strategy = strategy
-
-    async def data_receiver(self, receive_channel, send_channel):
-        async with receive_channel:
-            async for endpoint_name, data in receive_channel:
-                if self.strategy.data_type == endpoint_name:
-                    self.strategy.data_reveiver(endpoint_name, data)
-                   
-    async def singal(self, send_channel):
-        async for order in self.strategy.get_singal():
-            await send_channel.send([self.strategy.name, order])
-
-class MarketDataEngine:
-    def __init__(self, config):
-        self.config = config
-
-    def createMarketDataObjects(self):
-        """create market data object from config
-        """
-        res = []
-        for section in self.config.sections():
-            module = import_module("marketdata.dataclass")
-            class_name = self.config[section]["class"]
-            inst = getattr(module, class_name)(**self.config[section])
-            res.append(inst)
-
-        return res
-
 class TradingEngine:
-    def  __init__(self, executionEngine, date, mode, data_db):
-        self.executionEngine = executionEngine
+    def  __init__(self, date, mode, data_db):
         self.alfaEngines = {}
-        self.marketDataEngines = []
+        self.market_data_engines = []
         self.date = date
         self.db_obj = data_db
         self.mode = mode
+        self.strategy = None
+        self.booked_trade = set()
 
-    def addAlfaEngine(self, engineName, engine):
-        if engineName in self.alfaEngines:
-            print("replace")
-        self.alfaEngines[engineName] = engine
-
-    def addMarketDataEngine(self, marketDataEngines):
-        for engine in marketDataEngines:
-            self.marketDataEngines.append(engine)
+    def addMarketDataEngine(self, market_data_engines):
+        for engine in market_data_engines:
+            self.market_data_engines.append(engine)
 
     def validation(self):
-        if not self.marketDataEngines:
+        if not self.market_data_engines:
              raise MissingEngineExcpetion("No market data engine")
-        if not self.alfaEngines:
-            raise MissingEngineExcpetion("No alfa engine")
 
     async def data_writer(self, receive_channel):
         async with receive_channel:
             async for endpoint_name, data in receive_channel:
                 self.db_obj.write_data(endpoint_name, data)
-                
-        log.info("done")
 
-    async def order_execute(self, receive_channel):
-        async with receive_channel:
-            async for order in receive_channel:
-                self.executionEngine.send_order(order)
-                
-    async def grabberData(self, obj, send_channel, session):
-        for url, header in obj.creatRequet():
+    async def grab_data(self, obj, send_channel, session):
+        for url, header in obj.creat_requet():
             try:
                 resp = await session.send_request("GET", url, header=header, timeout=2)
             except asks.errors.RequestTimeout:
@@ -93,28 +50,25 @@ class TradingEngine:
             rawData = resp.json()
             processedData = obj.process(rawData)
             await send_channel.send([obj.endpoint_name, processedData])
+
         log.info("done")
 
-
-    async def getMarketData(self):
+    async def get_market_data(self):
         session = SessionWrap(data_db=self.db_obj,
                               mode=self.mode)
         self.validation()
         async with trio.open_nursery() as nursery:
             send_channel, receive_channel = trio.open_memory_channel(0)
-            for markeDataEngine in self.marketDataEngines:
-                nursery.start_soon(self.grabberData, markeDataEngine, send_channel, session)
+            for marke_data_engine in self.market_data_engines:
+                nursery.start_soon(self.grab_data, marke_data_engine, send_channel, session)
             
             if self.mode != Mode.TEST:
                 nursery.start_soon(self.data_writer, receive_channel)
 
-            for alfaEngine in self.alfaEngines.items():
-                nursery.start_soon(alfaEngine.data_receiver, receive_channel)
 
-    async def getSingal(self):
-        session = Session()
-        async with trio.open_nursery() as nursery:
-            send_channel, receive_channel = trio.open_memory_channel(0)
-            for alfaEngine in self.alfaEngines:
-                nursery.start_soon(alfaEngine.singal, send_channel)
-            nursery.start_soon(self.executionEngine.receive, receive_channel, session)
+           
+            
+
+            
+
+

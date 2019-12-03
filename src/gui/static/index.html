@@ -1,0 +1,53 @@
+<!doctype html>
+<title>Server Send Events Demo</title>
+<style>
+  #data {
+    text-align: center;
+  }
+</style>
+<script src="http://code.jquery.com/jquery-latest.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@2.8.0"></script>
+<script>
+var data = [];
+var canvas = document.getElementById('price');
+
+var price_chart = Chart.Line(canvas,{
+  data: data,
+  options: options
+});
+
+if (!!window.EventSource) {
+  var source = new EventSource('/');
+  source.onmessage = function(e) {
+    console.log(e)
+    $("#data").text(e.data);
+    data.push(e.data)
+    if(data.length > 5){
+      data.splice(2, 1);
+    }
+    adddata(e.chart_data)
+    console.log(data)
+  }
+}
+
+
+function adddata(price){
+  price_chart.data.labels.push(zero);
+  // price_chart.data.labels.splice(0, 1);
+  // price_chart.data.datasets[0].data.splice(0, 1);
+  price_chart.data.datasets[0].data.push(price); 
+  price_chart.update();
+  zero++;
+}
+
+function removeData(chart) {
+    chart.data.labels.pop();
+    chart.data.datasets.forEach((dataset) => {
+        dataset.data.pop();
+    });
+    chart.update();
+}
+
+</script>
+<div id="data">nothing received yet</div>
+<div><canvas id="price" width="400" height="250"></canvas></div>

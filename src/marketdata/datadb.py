@@ -11,10 +11,12 @@ class DataDB:
         client = MongoClient('localhost', self.port)
         if self.db_name not in client.list_database_names():
             print("Wrong db")
-        db_obj = client[self.db_name]
-        self.collections = {collection_name: db_obj[collection_name] for collection_name in db_obj.list_collection_names ()}
+        self.db_obj = client[self.db_name]
+        self.collections = {collection_name: self.db_obj[collection_name] for collection_name in self.db_obj.list_collection_names ()}
 
     def write_data(self, table_name, data):
+        if table_name not in self.collections:
+            self.collections[table_name] = self.db_obj[table_name]
         poster = self.collections[table_name].posts
         if isinstance(data, dict):
             poster.insert_one(data)
@@ -22,8 +24,12 @@ class DataDB:
             if data:
                 poster.insert_many(data)
 
+    def get_first_data(self, table_name):
+        poster = self.collections[table_name]
+        return poster.find_one()
+
     def get_data(self, table_name):
         poster = self.collections[table_name].posts
-        for data in poster.find({}, {'_id': False}):
+        for data in poster.find({}, {'timestamp': False}):
             yield data
             

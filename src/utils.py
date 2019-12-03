@@ -3,12 +3,17 @@ import datetime
 import os
 import csv
 from enum import Enum
-from matchingengine.engine import MatchEngine
 
 DATA_TYPE_LINE_BREAK = {"trade": "price",
                         "ticker": "ask",
                         "book": "ask"}
 
+class RECEIVE_TYPE(Enum):
+    NO_DATA = "no data"
+
+class ORDER_TYPE(Enum):
+    CANCEL = "cancel"
+    ORDER = "order"
 class CommunicationFlag(Enum):
     TEST_EOD = "EOD"
     
@@ -46,26 +51,31 @@ class SessionWrap(Session):
         self.mode = kwargs.pop("mode", "prod")
         self.start_date = kwargs.pop("start_date", None)
         self.end_date = kwargs.pop("end_date", None)
-        data_db = kwargs.pop("data_db", None)
+        self.data_db = kwargs.pop("data_db", None)
         if self.mode == Mode.TEST:
-            self.respone = Respone(data_db)
-            self.matching_engine = MatchEngine()
+            self.respone = Respone(self.data_db)
+            self.exection_engine = kwargs.pop("matching_engine", None)
 
         super(SessionWrap, self).__init__(**kwargs)
 
-    async def send_request(self, request_method, url, header, timeout):
+    async def send_request(self, request_method, data, header, timeout):
         if self.mode == Mode.TEST:
-            resp = self.respone.request(url)
+            resp = self.respone.request(data)
         else:
-            resp = await self.request(request_method, url, header=header, timeout=timeout)
+            resp = await self.request(request_method, data, header=header, timeout=timeout)
 
         return resp
 
-    async def send_order(self, order, request_method, url, header, timeout):
-        if self.mode == Mode.TEST:
-            resp = self.matching_engine.add_order(order)
-        else:
-            resp = await self.request(request_method, url, header=header, timeout=timeout)
+    async def send_order(self, orders):
+        res = []
+        for order_type, orders_info in orders.items():
+            if order_type == ORDER_TYPE.ORDER:
+                for order in orders_info:
+                    return_value = self.exection_engine.add_order(order)
+            elif order_type == ORDER_TYPE.CANCEL:
+                for order_id in orders_info:
+                    return_value = self.exection_engine.cancel_order(order_id, "ETH-USDT")
 
-        return resp
-        
+            res.append(return_value)
+
+        return res
