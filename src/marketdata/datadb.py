@@ -1,4 +1,4 @@
-from pymongo import MongoClient
+from pymongo import MongoClient, ASCENDING
 
 class DataDB:
     def __init__(self, db_name, port=27017):
@@ -24,12 +24,16 @@ class DataDB:
             if data:
                 poster.insert_many(data)
 
+    def regex_find(self, condition, table_name):
+        poster = self.collections[table_name]
+        return poster.find_one(condition)
+
     def get_first_data(self, table_name):
         poster = self.collections[table_name]
         return poster.find_one()
 
     def get_data(self, table_name):
         poster = self.collections[table_name].posts
-        for data in poster.find({}, {'timestamp': False}):
+        for data in poster.find().sort('timestamp', ASCENDING):
             yield data
             

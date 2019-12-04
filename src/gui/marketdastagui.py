@@ -28,8 +28,10 @@ def index():
         return Response(events(), content_type='text/event-stream')
     return redirect(url_for('static', filename='index.html'))
 
-# @app.rounte("/data")
-# def
+@app.rounte("/data")
+def test():
+    
+    render_template('template.html', my_string="Wheeeee!", my_list=[0,1,2,3,4,5])
 
 if __name__ == "__main__":
     app.run(debug=True)

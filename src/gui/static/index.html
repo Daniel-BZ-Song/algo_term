@@ -12,41 +12,40 @@ var data = [];
 var canvas = document.getElementById('price');
 
 var price_chart = Chart.Line(canvas,{
-  data: data,
-  options: options
+  data: {{ data }},
 });
 
-if (!!window.EventSource) {
-  var source = new EventSource('/');
-  source.onmessage = function(e) {
-    console.log(e)
-    $("#data").text(e.data);
-    data.push(e.data)
-    if(data.length > 5){
-      data.splice(2, 1);
-    }
-    adddata(e.chart_data)
-    console.log(data)
-  }
-}
+// if (!!window.EventSource) {
+//   var source = new EventSource('/');
+//   source.onmessage = function(e) {
+//     console.log(e)
+//     $("#data").text(e.data);
+//     data.push(e.data)
+//     if(data.length > 5){
+//       data.splice(2, 1);
+//     }
+//     adddata(e.chart_data)
+//     console.log(data)
+//   }
+// }
 
 
-function adddata(price){
-  price_chart.data.labels.push(zero);
-  // price_chart.data.labels.splice(0, 1);
-  // price_chart.data.datasets[0].data.splice(0, 1);
-  price_chart.data.datasets[0].data.push(price); 
-  price_chart.update();
-  zero++;
-}
+// function adddata(price){
+//   price_chart.data.labels.push(zero);
+//   // price_chart.data.labels.splice(0, 1);
+//   // price_chart.data.datasets[0].data.splice(0, 1);
+//   price_chart.data.datasets[0].data.push(price); 
+//   price_chart.update();
+//   zero++;
+// }
 
-function removeData(chart) {
-    chart.data.labels.pop();
-    chart.data.datasets.forEach((dataset) => {
-        dataset.data.pop();
-    });
-    chart.update();
-}
+// function removeData(chart) {
+//     chart.data.labels.pop();
+//     chart.data.datasets.forEach((dataset) => {
+//         dataset.data.pop();
+//     });
+//     chart.update();
+// }
 
 </script>
 <div id="data">nothing received yet</div>
